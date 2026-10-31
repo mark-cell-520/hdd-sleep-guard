@@ -2,15 +2,11 @@ import Cocoa
 
 // HDD Sleep Guard 菜单栏常驻程序（只做界面与控制）。
 // 真正的自动停转由 launchd 拉起的后台守护进程完成，退出本程序不影响自动停转。
-// 安装前缀由 install.sh 在编译前把 __PREFIX__ 替换为实际路径。
+// 核心引擎定位顺序：包内自带 -> 安装时写入的 install_prefix.txt -> 环境变量 HDDGUARD_HOME -> 默认 ~/hdd-sleep-guard。
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var refreshTimer: Timer?
-    let installPrefix = "__PREFIX__"
-    let pythonPath = "/usr/bin/python3"
-    var corePath: String { return installPrefix + "/daemon/hddguard_core.py" }
-    var logPath: String { return installPrefix + "/logs/hddguard.log" }
     var lastStatus: [String: Any] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -27,11 +23,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - 路径解析
+    func bundledCore() -> String? {
+        guard let res = Bundle.main.resourcePath else { return nil }
+        let p = res + "/daemon/hddguard_core.py"
+        return FileManager.default.fileExists(atPath: p) ? p : nil
+    }
+
+    func resolveCorePath() -> String {
+        let fm = FileManager.default
+        if let b = bundledCore() { return b }
+        if let res = Bundle.main.resourcePath {
+            let pf = res + "/install_prefix.txt"
+            if let prefix = try? String(contentsOfFile: pf, encoding: .utf8) {
+                let p = prefix.trimmingCharacters(in: .whitespacesAndNewlines) + "/daemon/hddguard_core.py"
+                if fm.fileExists(atPath: p) { return p }
+            }
+        }
+        if let env = ProcessInfo.processInfo.environment["HDDGUARD_HOME"] {
+            let p = env + "/daemon/hddguard_core.py"
+            if fm.fileExists(atPath: p) { return p }
+        }
+        return NSHomeDirectory() + "/hdd-sleep-guard/daemon/hddguard_core.py"
+    }
+
+    func resolveLogPath() -> String {
+        if bundledCore() != nil {
+            return NSHomeDirectory() + "/Library/Application Support/HDD Sleep Guard/hddguard.log"
+        }
+        let core = resolveCorePath()                              // .../PREFIX/daemon/hddguard_core.py
+        let daemon = (core as NSString).deletingLastPathComponent // .../PREFIX/daemon
+        let root = (daemon as NSString).deletingLastPathComponent // .../PREFIX
+        return root + "/logs/hddguard.log"
+    }
+
+    func pythonPath() -> String {
+        for p in ["/usr/bin/python3", "/opt/homebrew/bin/python3", "/usr/local/bin/python3"] {
+            if FileManager.default.isExecutableFile(atPath: p) { return p }
+        }
+        return "/usr/bin/python3"
+    }
+
     @discardableResult
     func runCore(_ args: [String]) -> String {
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: pythonPath)
-        proc.arguments = [corePath] + args
+        proc.executableURL = URL(fileURLWithPath: pythonPath())
+        proc.arguments = [resolveCorePath()] + args
         let pipe = Pipe()
         proc.standardOutput = pipe
         do { try proc.run() } catch { return "" }
@@ -130,7 +167,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         refresh()
     }
     @objc func refreshNow() { refresh() }
-    @objc func openLog() { NSWorkspace.shared.open(URL(fileURLWithPath: logPath)) }
+    @objc func openLog() { NSWorkspace.shared.open(URL(fileURLWithPath: resolveLogPath())) }
     @objc func quit() { NSApp.terminate(nil) }
 }
 

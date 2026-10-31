@@ -31,6 +31,16 @@ bash scripts/install.sh            # 默认安装到 ~/hdd-sleep-guard
 
 install.sh 会：拷贝源码 → 从 smartmontools 官方 dmg 提取 smartctl 与 drivedb.h → 安装并加载 launchd 守护 → 编译菜单栏 app → 把 hddguard 链到 ~/.local/bin。
 
+## 预编译 .app（免编译）
+
+不想自己编译，可到 Releases 页面下载最新的 HDD-Sleep-Guard.app.zip：
+
+https://github.com/mark-cell-520/hdd-sleep-guard/releases
+
+解压后把「HDD Sleep Guard.app」拖到「应用程序」或 ~/Applications。首次打开请右键 → 打开（未公证，Gatekeeper 首次会拦）。该 .app 自包含核心引擎与 smartctl，双击即用，可写数据存放在 ~/Library/Application Support/HDD Sleep Guard。
+
+注意：预编译 .app 提供菜单栏界面与手动停转/唤醒/温度；「空闲自动停转 + 登录自启」的后台守护仍需跑一次 scripts/install.sh。运行需要系统里有 python3（macOS 装过 Xcode 命令行工具，或 PATH 上任意 python3 均可）。
+
 ## 使用
 
 菜单栏：点右上角外置硬盘图标即可操作，最常用「立即全部停转」和空闲阈值。
@@ -71,7 +81,7 @@ hddguard logs [n]            # 最近 n 行日志
 ```
 daemon/hddguard_core.py        核心引擎（发现/空闲检测/停转/CLI）
 cli/hddguard                   命令行入口
-app/main.swift                 菜单栏 app（Swift/AppKit，编译前替换安装前缀）
+app/main.swift                 菜单栏 app（Swift/AppKit；核心定位：包内自带→install_prefix.txt→环境变量→默认前缀）
 app/Info.plist
 launchd/….plist.template       launchd 守护模板（安装时填入前缀）
 scripts/fetch_smartctl.sh      从官方 dmg 提取 smartctl（无需 brew/sudo）

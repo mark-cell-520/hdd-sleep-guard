@@ -24,9 +24,15 @@ import datetime
 BASE = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 SMARTCTL = os.path.join(BASE, "bin", "smartctl")
 DRIVEDB = os.path.join(BASE, "share", "drivedb.h")
-CONFIG_PATH = os.path.join(BASE, "config.json")
-STATE_PATH = os.path.join(BASE, "state.json")
-LOG_PATH = os.path.join(BASE, "logs", "hddguard.log")
+# 可写数据目录：随 .app 打包运行时改放 Application Support（app 包内不宜写）；
+# 按前缀安装的守护进程则仍用安装根，行为不变。
+if (".app" + os.sep + "Contents" + os.sep + "Resources") in BASE:
+    DATA_DIR = os.path.expanduser("~/Library/Application Support/HDD Sleep Guard")
+else:
+    DATA_DIR = BASE
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+STATE_PATH = os.path.join(DATA_DIR, "state.json")
+LOG_PATH = os.path.join(DATA_DIR, "hddguard.log")
 
 DEFAULT_CONFIG = {
     "idle_minutes": 15,        # 连续空闲多少分钟后停转
@@ -65,6 +71,7 @@ def load_config():
 
 def save_config(cfg):
     try:
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
     except Exception as e:
@@ -81,6 +88,7 @@ def load_state():
 
 def save_state(st):
     try:
+        os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
         with open(STATE_PATH, "w", encoding="utf-8") as f:
             json.dump(st, f, indent=2)
     except Exception:

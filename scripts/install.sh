@@ -24,13 +24,13 @@ launchctl bootout "gui/$UID_/com.user.hddsleepguard" 2>/dev/null || true
 launchctl bootstrap "gui/$UID_" "$HOME/Library/LaunchAgents/com.user.hddsleepguard.plist" 2>/dev/null \
   || launchctl load "$HOME/Library/LaunchAgents/com.user.hddsleepguard.plist"
 
-# 4. 编译菜单栏 app 并组装 .app
-sed "s#__PREFIX__#$PREFIX#g" "$SRC/app/main.swift" > "$PREFIX/app/main.built.swift"
-xcrun swiftc -o "$PREFIX/app/hdd-guard" "$PREFIX/app/main.built.swift"
+# 4. 编译菜单栏 app 并组装 .app（核心按前缀安装，app 经 install_prefix.txt 定位）
+xcrun swiftc -o "$PREFIX/app/hdd-guard" "$SRC/app/main.swift"
 APP="$PREFIX/app/HDD Sleep Guard.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 mv "$PREFIX/app/hdd-guard" "$APP/Contents/MacOS/hdd-guard"
 cp "$SRC/app/Info.plist" "$APP/Contents/Info.plist"
+printf '%s' "$PREFIX" > "$APP/Contents/Resources/install_prefix.txt"
 codesign --force --sign - "$APP" >/dev/null 2>&1 || true
 xattr -cr "$APP" 2>/dev/null || true
 
