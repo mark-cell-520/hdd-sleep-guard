@@ -1,0 +1,24 @@
+# 第三方二进制与驱动库（由 scripts/fetch_smartctl.sh 在安装时获取，不入库）
+bin/
+share/
+
+# 下载与构建临时产物
+src/
+*.dmg
+*.pkg
+pkg_expand/
+xar/
+root/
+
+# 运行时状态与日志
+logs/
+*.log
+state.json
+
+# 编译产物
+app/hdd-guard
+app/*.built.swift
+*.app
+
+# 系统杂项
+.DS_Store

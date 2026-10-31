@@ -1,0 +1,10 @@
+{
+  "idle_minutes": 15,
+  "poll_seconds": 60,
+  "idle_io_transfers": 3,
+  "temp_alert_c": 55,
+  "device_type": "auto",
+  "use_rdisk": true,
+  "manage_internal": false,
+  "enabled": true
+}

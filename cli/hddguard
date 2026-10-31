@@ -1,0 +1,11 @@
+#!/bin/bash
+# HDD Sleep Guard 命令行入口。
+# 解析自身真实路径（兼容软链），据此定位核心引擎，可整体搬迁、可软链到 PATH。
+src="${BASH_SOURCE[0]}"
+while [ -h "$src" ]; do
+  dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+  src="$(readlink "$src")"
+  case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+done
+DIR="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+exec /usr/bin/python3 "$DIR/../daemon/hddguard_core.py" "$@"
