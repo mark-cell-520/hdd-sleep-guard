@@ -138,6 +138,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         menu.addItem(.separator())
 
+        // 系统指标（成熟菜单栏监视器常见指标，无 root 采集；可在配置里用 system_metrics 关掉）
+        if let sys = lastStatus["system"] as? [String: Any], !sys.isEmpty {
+            add(menu, "系统", nil)
+            if let cpu = sys["cpu_used_pct"] as? Double {
+                add(menu, "CPU 使用率 \(String(format: "%.0f", cpu))%", nil)
+            }
+            if let mu = sys["mem_used_gb"] as? Double, let mt = sys["mem_total_gb"] as? Double {
+                let mp = sys["mem_used_pct"] as? Double ?? 0
+                add(menu, "内存 \(String(format: "%.1f", mu))/\(String(format: "%.0f", mt)) GB（\(String(format: "%.0f", mp))%）", nil)
+            }
+            if let load = sys["load"] as? [Double], load.count >= 3 {
+                add(menu, "负载 \(String(format: "%.2f", load[0])) / \(String(format: "%.2f", load[1])) / \(String(format: "%.2f", load[2]))", nil)
+            }
+            if let dsk = sys["disk_boot_pct"] as? Int {
+                add(menu, "启动盘已用 \(dsk)%", nil)
+            }
+            menu.addItem(.separator())
+        }
+
         add(menu, "立即全部停转", #selector(sleepAll))
         add(menu, "唤醒全部", #selector(wakeAll))
 

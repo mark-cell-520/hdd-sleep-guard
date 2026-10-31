@@ -42,6 +42,7 @@ DEFAULT_CONFIG = {
     "device_type": "auto",     # smartctl -d；auto/sat/usbjmicron/usbasm1352r/usbsunplus/...
     "use_rdisk": True,         # 用 /dev/rdiskN（原始设备）发指令，兼容性更好
     "manage_internal": False,  # 是否也管理内置机械盘（一般不用）
+    "system_metrics": True,    # 是否在状态里带 CPU/内存/负载/磁盘等系统指标（关掉更省电）
     "enabled": True,           # 自动停转总开关
 }
 
@@ -317,6 +318,57 @@ def human_size(n):
     return "%.1fPB" % n
 
 
+def read_system_metrics():
+    """无 root 读取 CPU/内存/负载/启动盘用量（成熟菜单栏监视器常见指标）。"""
+    import re
+    m = {}
+    try:
+        rc, out = _run(["top", "-l", "2", "-n", "0", "-s", "1", "-stats", "cpu"], timeout=8)
+        idle = None
+        for line in out.splitlines():
+            mm = re.search(r"([\d.]+)%\s*idle", line)
+            if mm:
+                idle = float(mm.group(1))
+        if idle is not None:
+            m["cpu_used_pct"] = round(100.0 - idle, 1)
+    except Exception:
+        pass
+    try:
+        rc, out = _run(["vm_stat"], timeout=6)
+        pm = re.search(r"page size of (\d+) bytes", out)
+        pagesize = int(pm.group(1)) if pm else 4096
+
+        def pg(name):
+            mm = re.search(name + r":\s+(\d+)", out)
+            return int(mm.group(1)) if mm else 0
+        rc2, tb = _run(["sysctl", "-n", "hw.memsize"], timeout=6)
+        total = int(tb.strip())
+        avail = (pg("Pages free") + pg("Pages inactive")) * pagesize
+        used = total - avail
+        m["mem_used_gb"] = round(used / 1073741824.0, 1)
+        m["mem_total_gb"] = round(total / 1073741824.0, 1)
+        m["mem_used_pct"] = round(used * 100.0 / total, 1) if total else None
+    except Exception:
+        pass
+    try:
+        rc, out = _run(["sysctl", "-n", "vm.loadavg"], timeout=6)
+        nums = re.findall(r"[\d.]+", out)
+        if len(nums) >= 3:
+            m["load"] = [round(float(nums[0]), 2), round(float(nums[1]), 2), round(float(nums[2]), 2)]
+    except Exception:
+        pass
+    try:
+        rc, out = _run(["df", "-Pk", "/"], timeout=6)
+        lines = out.splitlines()
+        if len(lines) >= 2:
+            pct = lines[1].split()[4].rstrip("%")
+            if pct.isdigit():
+                m["disk_boot_pct"] = int(pct)
+    except Exception:
+        pass
+    return m
+
+
 def build_status(cfg, hdds, state, now):
     idle_secs = int(cfg.get("idle_minutes", 15)) * 60
     items = []
@@ -336,13 +388,16 @@ def build_status(cfg, hdds, state, now):
             # 只在盘正在旋转时读温度，避免为读温度而唤醒已停转的盘
             "temp_c": read_temp(d, cfg) if spinning else None,
         })
-    return {
+    out = {
         "enabled": cfg.get("enabled", True),
         "idle_minutes": cfg.get("idle_minutes"),
         "poll_seconds": cfg.get("poll_seconds"),
         "ts": int(now),
         "disks": items,
     }
+    if cfg.get("system_metrics", True):
+        out["system"] = read_system_metrics()
+    return out
 
 
 def cmd_status_json(cfg):
