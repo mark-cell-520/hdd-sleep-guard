@@ -43,6 +43,7 @@ DEFAULT_CONFIG = {
     "use_rdisk": True,         # 用 /dev/rdiskN（原始设备）发指令，兼容性更好
     "manage_internal": False,  # 是否也管理内置机械盘（一般不用）
     "system_metrics": True,    # 是否在状态里带 CPU/内存/负载/磁盘等系统指标（关掉更省电）
+    "smc_tool_path": "/Applications/Stats.app/Contents/Resources/smc",  # SMC 温度读取工具（有则读系统温度，无则自动跳过）
     "enabled": True,           # 自动停转总开关
 }
 
@@ -369,6 +370,29 @@ def read_system_metrics():
     return m
 
 
+def read_smc_temps(cfg):
+    """通过 SMC 读取工具（如 Stats 自带 smc）无 root 读系统温度传感器，返回平均/最高。
+    工具不存在或不可用则返回 None（自动降级，不报错）。"""
+    import re
+    tool = cfg.get("smc_tool_path", "/Applications/Stats.app/Contents/Resources/smc")
+    if not tool or not os.path.exists(tool):
+        return None
+    rc, out = _run([tool, "list", "-t"], timeout=8)
+    if rc != 0:
+        return None
+    vals = []
+    for m in re.finditer(r"\[[^\]]+\]\s+([\d.]+)", out):
+        try:
+            v = float(m.group(1))
+        except ValueError:
+            continue
+        if v > 0:
+            vals.append(v)
+    if not vals:
+        return None
+    return {"avg": round(sum(vals) / len(vals), 1), "max": round(max(vals), 1), "n": len(vals)}
+
+
 def build_status(cfg, hdds, state, now):
     idle_secs = int(cfg.get("idle_minutes", 15)) * 60
     items = []
@@ -395,6 +419,16 @@ def build_status(cfg, hdds, state, now):
         "ts": int(now),
         "disks": items,
     }
+    # 温度汇总（供菜单栏直接显示一个平均值 + 硬盘温度）
+    temps = {}
+    disk_vals = [it["temp_c"] for it in items if it.get("temp_c") is not None]
+    if disk_vals:
+        temps["disk_avg"] = round(sum(disk_vals) / len(disk_vals), 1)
+        temps["disk_max"] = max(disk_vals)
+    smc = read_smc_temps(cfg)
+    if smc:
+        temps["system"] = smc
+    out["temps"] = temps
     if cfg.get("system_metrics", True):
         out["system"] = read_system_metrics()
     return out

@@ -73,6 +73,8 @@ hddguard noindex [diskN...]  # 关闭外置盘 Spotlight 索引（减少索引�
 | device_type | auto | smartctl -d；USB 桥接不认标准待机时试 sat / usbjmicron / usbasm1352r / usbsunplus |
 | use_rdisk | true | 用 /dev/rdiskN 发指令，兼容性更好 |
 | manage_internal | false | 是否也管理内置机械盘 |
+| system_metrics | true | 是否采集并显示 CPU/内存/负载/启动盘等系统指标 |
+| smc_tool_path | /Applications/Stats.app/Contents/Resources/smc | SMC 温度读取工具；存在则菜单栏显示系统平均/最高温度，不存在自动跳过 |
 
 ## 关于外置 USB 硬盘盒 / 扩展坞
 

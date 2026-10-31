@@ -119,6 +119,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         add(menu, "自动停转\(enabled ? "已启用" : "已停用")，空闲 \(idle) 分钟", nil)
         menu.addItem(.separator())
 
+        if let temps = lastStatus["temps"] as? [String: Any], !temps.isEmpty {
+            if let sys = temps["system"] as? [String: Any] {
+                add(menu, "系统温度 平均 \(String(format: "%.1f", sys["avg"] as? Double ?? 0))°C · 最高 \(String(format: "%.1f", sys["max"] as? Double ?? 0))°C", nil)
+            }
+            if let davg = temps["disk_avg"] as? Double {
+                add(menu, "硬盘温度 平均 \(String(format: "%.1f", davg))°C · 最高 \(String(format: "%.1f", temps["disk_max"] as? Double ?? 0))°C", nil)
+            }
+            menu.addItem(.separator())
+        }
+
         let disks = lastStatus["disks"] as? [[String: Any]] ?? []
         if disks.isEmpty {
             add(menu, "未发现外置机械硬盘", nil)
@@ -177,6 +187,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         add(menu, "刷新", #selector(refreshNow))
         add(menu, "查看日志", #selector(openLog))
         add(menu, "退出菜单图标（后台服务继续）", #selector(quit))
+        // 菜单栏图标旁直接显示温度摘要（平均温度 + 硬盘温度）
+        var parts: [String] = []
+        if let temps = lastStatus["temps"] as? [String: Any] {
+            if let sys = temps["system"] as? [String: Any], let avg = sys["avg"] as? Double {
+                parts.append("平均 \(String(format: "%.0f", avg))°C")
+            }
+            if let davg = temps["disk_avg"] as? Double {
+                parts.append("盘 \(String(format: "%.0f", davg))°C")
+            }
+        }
+        statusItem.button?.title = parts.joined(separator: "  ")
         return menu
     }
 
