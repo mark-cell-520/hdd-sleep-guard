@@ -56,6 +56,10 @@ hddguard info  <diskN>       # smartctl 完整信息
 hddguard enable / disable    # 开/关自动停转
 hddguard set <key> <val>     # 改配置，如 set idle_minutes 20
 hddguard logs [n]            # 最近 n 行日志
+hddguard noindex [diskN...]  # 关闭外置盘 Spotlight 索引（减少索引唤醒，降待机功耗）
+```
+
+温度说明：菜单栏与 hddguard temp 显示的是硬盘温度（走 SMART，无需权限）。CPU/GPU/整机温度在 Apple 芯片上不走传统 SMC，可用开源菜单栏工具 Stats（exelban/stats，无需 sudo）显示。
 ```
 
 ## 配置（config.json）

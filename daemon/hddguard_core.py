@@ -295,6 +295,7 @@ def run_daemon():
                                 (d, h["name"], idle_for / 60.0))
                 state[d] = st
             save_state(state)
+            write_status_snapshot(cfg, hdds, state, now)
         except Exception as e:
             log("守护循环异常: %s" % e)
         # 节奏控制：每轮总耗时至少 poll 秒，避免无盘时 busy-loop
@@ -316,10 +317,7 @@ def human_size(n):
     return "%.1fPB" % n
 
 
-def cmd_status_json(cfg):
-    hdds = discover_hdds(cfg)
-    state = load_state()
-    now = time.time()
+def build_status(cfg, hdds, state, now):
     idle_secs = int(cfg.get("idle_minutes", 15)) * 60
     items = []
     for h in hdds:
@@ -338,13 +336,53 @@ def cmd_status_json(cfg):
             # 只在盘正在旋转时读温度，避免为读温度而唤醒已停转的盘
             "temp_c": read_temp(d, cfg) if spinning else None,
         })
-    out = {
+    return {
         "enabled": cfg.get("enabled", True),
         "idle_minutes": cfg.get("idle_minutes"),
         "poll_seconds": cfg.get("poll_seconds"),
+        "ts": int(now),
         "disks": items,
     }
-    print(json.dumps(out, ensure_ascii=False))
+
+
+def cmd_status_json(cfg):
+    print(json.dumps(build_status(cfg, discover_hdds(cfg), load_state(), time.time()), ensure_ascii=False))
+
+
+def write_status_snapshot(cfg, hdds, state, now):
+    """守护进程每轮写一份状态快照，供菜单栏 app 直接读文件，免去每次刷新都起 python。"""
+    try:
+        path = os.path.join(DATA_DIR, "status.json")
+        tmp = path + ".tmp"
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(build_status(cfg, hdds, state, now), f, ensure_ascii=False)
+        os.replace(tmp, path)
+    except Exception as e:
+        log("写状态快照失败: %s" % e)
+
+
+def cmd_datadir(cfg):
+    print(DATA_DIR)
+
+
+def cmd_noindex(cfg, disks):
+    """关闭外置机械盘的 Spotlight 索引，避免后台索引反复唤醒/旋转硬盘，降低待机功耗。"""
+    hdds = discover_hdds(cfg)
+    bymap = {h["bsd"]: h for h in hdds}
+    targets = disks or list(bymap.keys())
+    for d in targets:
+        h = bymap.get(d)
+        if not h:
+            print("跳过 %s：不是已识别的机械盘" % d)
+            continue
+        mp = h.get("mount") or ""
+        if not mp:
+            print("%s 未挂载，无法排除索引（插上并挂载后再试）" % d)
+            continue
+        rc, out = _run(["mdutil", "-i", "off", mp], timeout=30)
+        print("%s (%s)：已关闭 Spotlight 索引 rc=%d" % (d, mp, rc))
+        log("noindex %s %s rc=%d %s" % (d, mp, rc, out.strip().splitlines()[-1] if out.strip() else ""))
 
 
 def cmd_status(cfg):
@@ -476,6 +514,8 @@ def print_help():
     print("  enable / disable    开/关自动停转")
     print("  set <key> <val>     改配置，如 set idle_minutes 20")
     print("  logs [n]            看最近 n 行日志")
+    print("  noindex [diskN...]  关闭外置盘 Spotlight 索引（降待机功耗）")
+    print("  datadir             打印数据目录")
     print("  --daemon            以前台守护进程运行（一般由 launchd 拉起）")
 
 
@@ -527,6 +567,10 @@ def main(argv):
         cfg[key] = v
         save_config(cfg)
         print("已设置 %s = %s" % (key, v))
+    elif cmd == "datadir":
+        cmd_datadir(cfg)
+    elif cmd == "noindex":
+        cmd_noindex(cfg, argv[1:])
     elif cmd == "logs":
         cmd_logs(argv[1:])
     elif cmd in ("-h", "--help", "help"):

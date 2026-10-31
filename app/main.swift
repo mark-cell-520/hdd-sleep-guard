@@ -8,6 +8,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var refreshTimer: Timer?
     var lastStatus: [String: Any] = [:]
+    var statusFile: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -17,6 +18,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                                 accessibilityDescription: "HDD Sleep Guard")
             btn.toolTip = "HDD Sleep Guard"
         }
+        let dd = runCore(["datadir"]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !dd.isEmpty { statusFile = dd + "/status.json" }
         refresh()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             self?.refresh()
@@ -77,6 +80,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func refresh() {
+        // 优先读守护进程写的状态快照（不起 python，省功耗）；缺失或过期则回退到直接调核心
+        if let sf = statusFile,
+           let data = try? Data(contentsOf: URL(fileURLWithPath: sf)),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let ts = obj["ts"] as? Int ?? 0
+            let poll = obj["poll_seconds"] as? Int ?? 60
+            let age = Int(Date().timeIntervalSince1970) - ts
+            if age >= 0 && age <= max(180, poll * 3) {
+                lastStatus = obj
+                statusItem.menu = buildMenu()
+                return
+            }
+        }
         let out = runCore(["status", "--json"])
         if let data = out.data(using: .utf8),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
